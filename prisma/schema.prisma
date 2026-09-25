@@ -1,0 +1,168 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("STAFF") // ADMIN, STAFF
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  paymentsCreated Payment[]
+  remindersSent   WhatsAppReminderLog[]
+  auditLogs       AuditLog[]
+}
+
+model Plan {
+  id             String    @id @default(cuid())
+  name           String
+  durationMonths Int       @default(1)
+  durationDays   Int       @default(30)
+  fee            Float
+  description    String?
+  status         String    @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  members        Member[]
+  payments       Payment[]
+}
+
+model Member {
+  id               String    @id @default(cuid())
+  memberCode       String    @unique
+  fullName         String
+  mobile           String
+  whatsapp         String?
+  email            String?
+  dob              DateTime?
+  gender           String?   // Male, Female, Other
+  address          String?
+  joiningDate      DateTime  @default(now())
+  profilePhoto     String?
+  emergencyContact String?
+  
+  planId           String?
+  plan             Plan?     @relation(fields: [planId], references: [id])
+  startDate        DateTime  @default(now())
+  expiryDate       DateTime
+  status           String    @default("ACTIVE") // ACTIVE, EXPIRING_SOON, EXPIRED, FROZEN, INACTIVE, ARCHIVED
+  
+  isArchived       Boolean   @default(false)
+  archivedAt       DateTime?
+  notes            String?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  payments         Payment[]
+  reminders        WhatsAppReminderLog[]
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  receiptNo     String    @unique
+  memberId      String
+  member        Member    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  planId        String?
+  plan          Plan?     @relation(fields: [planId], references: [id])
+  
+  amount        Float
+  discount      Float     @default(0)
+  finalAmount   Float
+  paymentDate   DateTime  @default(now())
+  dueDate       DateTime?
+  
+  paymentMethod String    @default("CASH") // CASH, UPI, BANK_TRANSFER, CARD, OTHER
+  transactionId String?
+  status        String    @default("PAID") // PAID, PENDING, PARTIALLY_PAID, OVERDUE, CANCELLED
+  notes         String?
+  
+  createdById   String?
+  createdBy     User?     @relation(fields: [createdById], references: [id])
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  reminders     WhatsAppReminderLog[]
+}
+
+model WhatsAppReminderLog {
+  id             String    @id @default(cuid())
+  memberId       String
+  member         Member    @relation(fields: [memberId], references: [id])
+  paymentId      String?
+  payment        Payment?  @relation(fields: [paymentId], references: [id])
+  
+  mobile         String
+  messageContent String
+  initiatedAt    DateTime  @default(now())
+  initiatedById  String?
+  initiatedBy    User?     @relation(fields: [initiatedById], references: [id])
+  status         String    @default("INITIATED") // INITIATED, SENT, FAILED
+}
+
+model WhatsAppTemplate {
+  id           String    @id @default(cuid())
+  title        String
+  templateType String    @unique // FEE_DUE, EXPIRY_WARNING, OVERDUE, WELCOME, PAYMENT_RECEIPT
+  templateBody String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model BackupRecord {
+  id           String    @id @default(cuid())
+  backupType   String    // MANUAL_LOCAL, AUTO_DAILY, GDRIVE, EXCEL, PRE_RESTORE_SAFETY
+  fileName     String
+  filePath     String
+  fileSize     Int       @default(0)
+  status       String    @default("SUCCESS") // SUCCESS, FAILED, WARNING
+  gdriveFileId String?
+  gdriveStatus String?   // CONNECTED, SYNCED, FAILED, NOT_CONFIGURED
+  errorMessage String?
+  verified     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  userName   String?
+  userRole   String?
+  action     String    // LOGIN, LOGOUT, MEMBER_CREATE, MEMBER_UPDATE, MEMBER_ARCHIVE, PAYMENT_ADD, PAYMENT_UPDATE, WHATSAPP_INITIATED, BACKUP_CREATED, BACKUP_RESTORED, SETTINGS_UPDATE
+  entityType String?   // Member, Payment, Plan, Backup, User, Setting
+  entityId   String?
+  details    String?   // JSON string with before/after or extra context
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+}
+
+model SystemSetting {
+  id                  String    @id @default("default_setting")
+  gymName             String    @default("THE GYM")
+  gymPhone            String    @default("+91 98765 43210")
+  gymEmail            String    @default("info@ironpowergym.com")
+  gymAddress          String    @default("123 Fitness Avenue, Central Park, City - 560001")
+  currencySymbol      String    @default("₹")
+  gdriveEnabled       Boolean   @default(false)
+  gdriveFolderId      String?
+  gdriveStatus        String    @default("NOT_CONFIGURED") // CONNECTED, FAILED, NOT_CONFIGURED
+  gdriveLastError     String?
+  autoBackupHour      Int       @default(2) // 2 AM daily
+  lastBackupAt        DateTime?
+  nextScheduledBackup DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
